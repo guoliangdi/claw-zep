@@ -1,0 +1,145 @@
+# claw-zep 一键编排
+# 启动: docker compose up -d --build
+# 访问: 前端 http://localhost  ·  后端文档 http://localhost:8000/api/docs
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: claw-zep-postgres
+    environment:
+      POSTGRES_DB: claw_zep
+      POSTGRES_USER: claw_zep_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-claw_zep_pass}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U claw_zep_user -d claw_zep"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: claw-zep-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  chroma:
+    image: chromadb/chroma:0.5.23
+    container_name: claw-zep-chroma
+    environment:
+      IS_PERSISTENT: "TRUE"
+      ANONYMIZED_TELEMETRY: "FALSE"
+    volumes:
+      - chroma_data:/chroma/chroma
+    ports:
+      - "8001:8000"
+
+  minio:
+    image: minio/minio:latest
+    container_name: claw-zep-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${OBJECT_STORAGE_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${OBJECT_STORAGE_SECRET_KEY:-minioadmin}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: claw-zep-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: claw_zep
+      POSTGRES_USER: claw_zep_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-claw_zep_pass}
+      REDIS_HOST: redis
+      CHROMA_HOST: chroma
+      CHROMA_PORT: "8000"
+      KUZU_DB_PATH: /app/data/kuzu_db
+      CHROMA_PERSIST_DIR: /app/data/chroma_db
+      OBJECT_STORAGE_ENDPOINT: minio:9000
+      OBJECT_STORAGE_ACCESS_KEY: ${OBJECT_STORAGE_ACCESS_KEY:-minioadmin}
+      OBJECT_STORAGE_SECRET_KEY: ${OBJECT_STORAGE_SECRET_KEY:-minioadmin}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me-jwt-secret-32-chars-min!!}
+      SECRET_KEY: ${SECRET_KEY:-change-me-secret-32-chars-min!!!!!}
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-admin@claw-zep.com}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-Admin@123456}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-https://api.openai.com/v1}
+    volumes:
+      - backend_data:/app/data
+    ports:
+      - "8000:8000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: claw-zep-worker
+    depends_on:
+      - backend
+      - redis
+    command: celery -A core.celery_app:celery_app worker --beat --loglevel=info -Q graphiti,memory_tree,cleanup
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: claw_zep
+      POSTGRES_USER: claw_zep_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-claw_zep_pass}
+      REDIS_HOST: redis
+      CHROMA_HOST: chroma
+      CHROMA_PORT: "8000"
+      KUZU_DB_PATH: /app/data/kuzu_db
+      CHROMA_PERSIST_DIR: /app/data/chroma_db
+      OBJECT_STORAGE_ENDPOINT: minio:9000
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+    volumes:
+      - backend_data:/app/data
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: claw-zep-frontend
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+
+volumes:
+  pg_data:
+  redis_data:
+  chroma_data:
+  minio_data:
+  backend_data:
