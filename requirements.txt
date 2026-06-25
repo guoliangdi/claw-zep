@@ -13,10 +13,14 @@ alembic==1.14.0
 asyncpg==0.30.0
 psycopg2-binary==2.9.10
 
-# Database - Kuzu (Graph)
+# Database - PostgreSQL 图谱/向量扩展（storage_backend=postgres）
+pgvector==0.3.6           # pgvector SQLAlchemy 类型支持
+# Apache AGE 通过原生 Cypher SQL 调用，无需额外 Python 驱动
+
+# Database - Kuzu (Graph，旧后端，storage_backend=kuzu_chroma)
 kuzu==0.7.0
 
-# Database - Chroma (Vector)
+# Database - Chroma (Vector，旧后端)
 chromadb==0.5.23
 
 # Cache & Queue

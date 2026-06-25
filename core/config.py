@@ -69,11 +69,22 @@ class Settings(BaseSettings):
     celery_broker_url: str = ""
     celery_result_backend: str = ""
 
-    # Kuzu
+    # 存储后端开关：kuzu_chroma（旧，Kuzu图+Chroma向量）| postgres（新，单PG: AGE图+pgvector）
+    # 演进期保留两套实现，验证通过后默认切 postgres
+    storage_backend: str = "kuzu_chroma"
+
+    # PostgreSQL 图谱/向量扩展（storage_backend=postgres 时生效）
+    age_enabled: bool = True            # Apache AGE 图加速；不可用时自动回退纯 SQL 递归 CTE
+    age_graph_name: str = "claw_graph"  # AGE 图命名空间（全租户共享，按 project_id 属性隔离）
+    pgvector_enabled: bool = True       # pgvector 向量索引；不可用时回退内存余弦
+    pgvector_hnsw_m: int = 16
+    pgvector_hnsw_ef_construction: int = 64
+
+    # Kuzu（旧后端）
     kuzu_db_path: str = "./data/kuzu_db"
     kuzu_max_db_size_gb: int = 10
 
-    # Chroma
+    # Chroma（旧后端）
     chroma_host: str = "localhost"
     chroma_port: int = 8001
     chroma_persist_dir: str = "./data/chroma_db"

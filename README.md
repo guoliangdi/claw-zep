@@ -2,10 +2,10 @@
 
 # 🦞 claw-zep
 
-**私有化 · 自主可控 · 时序知识中台**
+**私有化 · 自主可控 · 时序记忆存储**
 
-对标官方 [Zep](https://www.getzep.com/)，融合 Palantir 级动态时序知识图谱能力
-基于开源 [Graphiti](https://github.com/getzep/graphiti) 内核二次扩展 · 前后端分离 · 多租户 · 全链路双时序
+融合 Palantir 级动态时序知识图谱能力
+前后端分离 · 多租户 · 全链路双时序
 
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)

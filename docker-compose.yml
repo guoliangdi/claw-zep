@@ -4,7 +4,10 @@
 
 services:
   postgres:
-    image: postgres:16-alpine
+    # 内置 Apache AGE（图）+ pgvector（向量）的 PostgreSQL 16
+    build:
+      context: ./deploy/postgres
+    image: claw-zep/postgres-age-pgvector:16
     container_name: claw-zep-postgres
     environment:
       POSTGRES_DB: claw_zep
@@ -33,17 +36,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
-  chroma:
-    image: chromadb/chroma:0.5.23
-    container_name: claw-zep-chroma
-    environment:
-      IS_PERSISTENT: "TRUE"
-      ANONYMIZED_TELEMETRY: "FALSE"
-    volumes:
-      - chroma_data:/chroma/chroma
-    ports:
-      - "8001:8000"
 
   minio:
     image: minio/minio:latest
@@ -76,15 +68,12 @@ services:
     environment:
       APP_ENV: production
       APP_DEBUG: "false"
+      STORAGE_BACKEND: postgres
       POSTGRES_HOST: postgres
       POSTGRES_DB: claw_zep
       POSTGRES_USER: claw_zep_user
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-claw_zep_pass}
       REDIS_HOST: redis
-      CHROMA_HOST: chroma
-      CHROMA_PORT: "8000"
-      KUZU_DB_PATH: /app/data/kuzu_db
-      CHROMA_PERSIST_DIR: /app/data/chroma_db
       OBJECT_STORAGE_ENDPOINT: minio:9000
       OBJECT_STORAGE_ACCESS_KEY: ${OBJECT_STORAGE_ACCESS_KEY:-minioadmin}
       OBJECT_STORAGE_SECRET_KEY: ${OBJECT_STORAGE_SECRET_KEY:-minioadmin}
@@ -112,15 +101,12 @@ services:
       - redis
     command: celery -A core.celery_app:celery_app worker --beat --loglevel=info -Q graphiti,memory_tree,cleanup
     environment:
+      STORAGE_BACKEND: postgres
       POSTGRES_HOST: postgres
       POSTGRES_DB: claw_zep
       POSTGRES_USER: claw_zep_user
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-claw_zep_pass}
       REDIS_HOST: redis
-      CHROMA_HOST: chroma
-      CHROMA_PORT: "8000"
-      KUZU_DB_PATH: /app/data/kuzu_db
-      CHROMA_PERSIST_DIR: /app/data/chroma_db
       OBJECT_STORAGE_ENDPOINT: minio:9000
       LLM_API_KEY: ${LLM_API_KEY:-}
       EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
@@ -140,6 +126,5 @@ services:
 volumes:
   pg_data:
   redis_data:
-  chroma_data:
   minio_data:
   backend_data:

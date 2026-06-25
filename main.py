@@ -18,8 +18,15 @@ logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    logger.info("claw-zep starting", env=settings.app_env)
+    logger.info("claw-zep starting", env=settings.app_env, storage=settings.storage_backend)
     await init_db()
+    # 单 PG 后端：初始化 pgvector / AGE 扩展（幂等，缺失则降级）
+    if settings.storage_backend == "postgres":
+        from core.database import engine
+        from core.adapters.pg_init import init_postgres_extensions
+
+        ext = await init_postgres_extensions(engine)
+        logger.info("postgres extensions", **ext)
     await get_redis()
     # 幂等初始化：权限/系统角色/超级管理员
     from core.database import AsyncSessionLocal
