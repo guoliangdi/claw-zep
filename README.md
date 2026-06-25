@@ -2,7 +2,7 @@
 
 # 🦞 claw-zep
 
-**私有化 · 自主可控 · 时序记忆存储**
+**私有化 · 自主可控 · 时序记忆中台**
 
 融合 Palantir 级动态时序知识图谱能力
 前后端分离 · 多租户 · 全链路双时序
@@ -30,8 +30,6 @@
 > *"如果 A 供应商断供，会沿着供应链影响到哪些产品线？"*
 > *"这个结论的依据来自哪几条原始记忆？"*
 
-系统直接引入官方 **Graphiti** 作为实体/关系抽取内核（**不重构、只扩展**），在其外层自研调度层接管多租户绑定、时序打标与三大存储分发；当外部大模型不可用时自动降级为内置启发式抽取，确保**纯内网、无外网环境亦可完整运行**。
-
 ---
 
 ## ✨ 功能特性
@@ -39,8 +37,8 @@
 | 能力 | 说明 |
 |------|------|
 | 🕒 **全局双时序模型** | 实体/关系/向量/记忆树节点强制挂载 `valid_from / valid_until / version / source`，支撑知识过期、冲突消解、**任意时间点快照**、**历史版本回溯**、因果推演 |
-| 🧠 **基于 Graphiti 扩展** | 复用官方 Graphiti 的 LLM 实体/关系抽取能力，自研调度层注入租户/项目/时序并分发写入图库、向量库、记忆树 |
-| 🌳 **OpenHuman 记忆树** | SourceTree / TopicTree / GlobalTree 三层架构，节点 Markdown 在线编辑、绑定图谱实体、版本回溯、**Obsidian 格式导出** |
+| 🧠 **基于 Graphiti 扩展** | Graphiti 的 LLM 实体/关系抽取能力，自研调度层注入租户/项目/时序并分发写入图库、向量库、记忆树 |
+| 🌳 **记忆树** | SourceTree / TopicTree / GlobalTree 三层架构，节点 Markdown 在线编辑、绑定图谱实体、版本回溯、**Obsidian 格式导出** |
 | 🔍 **混合检索引擎** | 时序过滤 → 向量语义召回 → 图谱关系链路遍历 → 记忆树摘要加权重排，支撑常规问答 + 企业复杂事件溯源 |
 | 🧭 **Palantir 级因果推演** | 自然语言提问 → 自动识别种子实体 → 因果链路 BFS → 子图可视化 → 记忆树证据溯源 → LLM 综合结论 |
 | 🏢 **企业级多租户** | 超级租户 / 租户管理员 / 项目成员三级架构，全数据携带 `tenant_id`；Project 项目隔离，切换项目自动隔离数据 |
@@ -277,7 +275,26 @@ claw-zep/
 
 ## 📄 许可证
 
-本项目以 [Apache-2.0](LICENSE) 协议开源。内置组件（Kuzu / Chroma / PostgreSQL / Redis / MinIO / Graphiti）均为 Apache-2.0 或兼容协议，**商用无风险**。
+1. Code License Partition 代码协议划分
+① Self-developed Core Code (Main Repository)
+License: GNU Affero General Public License v3.0 (AGPLv3)
+All independently developed modules in this repository are protected by AGPLv3, including but not limited to:
+- Time-series memory scheduling engine
+- AI Agent long-term memory management
+- Dynamic time-series knowledge graph extension capabilities
+- Enterprise multi-tenant & privatization deployment framework
+- Risk inference & time-series reasoning logic
+- Knowledge middle platform core orchestration capabilities
+② External Dependency: Graphiti
+We donot incorporate Graphiti source code into this repository. All Graphiti-related capabilities follow the original Apache 2.0 open-source license.
+Lightweight auxiliary modules such as client SDKs, API connectors, visualization components and demo examples are fully open and can be freely integrated into closed-source business systems.
+✅ Allowed for free (no restrictions)
+- Secondary development and contribution to the community
+❌ Prohibited behavior without commercial authorization
+3. Commercial Closed-Source Authorization (Dual License Model)
+- Allow closed-source secondary development and commercial resale
+
+---
 
 ---
 
