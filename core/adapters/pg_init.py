@@ -66,17 +66,27 @@ async def _init_pgvector(conn) -> bool:
 
 
 async def _init_age(conn) -> bool:
+    """
+    检测 AGE 是否就绪。注意：
+      · age 已在 shared_preload_libraries，无需 LOAD（且非超级用户无权 LOAD）
+      · 图与固定 label(Entity/REL) 由 DBA 预建并授权（见 deploy 文档），
+        app 角色只做 DML，此处仅做存在性检测，不尝试 DDL。
+    """
     try:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS age;"))
-        await conn.execute(text("LOAD 'age';"))
-        await conn.execute(text('SET search_path = ag_catalog, "$user", public;'))
         graph = settings.age_graph_name
         exists = await conn.scalar(
             text("SELECT count(*) FROM ag_catalog.ag_graph WHERE name = :g"),
             {"g": graph},
         )
         if not exists:
-            await conn.execute(text("SELECT create_graph(:g);"), {"g": graph})
+            # 有权限则建图（DBA 角色场景）；无权限则交由部署脚本预建
+            try:
+                await conn.execute(text("SELECT ag_catalog.create_graph(:g);"), {"g": graph})
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("AGE graph absent and cannot auto-create; pre-create via deploy script",
+                               graph=graph, error=str(exc))
+                return False
         logger.info("AGE ready", graph=graph)
         return True
     except Exception as exc:  # noqa: BLE001
@@ -85,13 +95,14 @@ async def _init_age(conn) -> bool:
 
 
 async def init_postgres_extensions(engine: AsyncEngine) -> dict:
-    """在应用启动时调用（仅 storage_backend=postgres）。返回各扩展可用性。"""
+    """在应用启动时调用（仅 storage_backend=postgres）。各扩展独立事务，互不影响。"""
     result = {"pgvector": False, "age": False}
     if settings.storage_backend != "postgres":
         return result
-    async with engine.begin() as conn:
-        if settings.pgvector_enabled:
+    if settings.pgvector_enabled:
+        async with engine.begin() as conn:
             result["pgvector"] = await _init_pgvector(conn)
-        if settings.age_enabled:
+    if settings.age_enabled:
+        async with engine.begin() as conn:
             result["age"] = await _init_age(conn)
     return result

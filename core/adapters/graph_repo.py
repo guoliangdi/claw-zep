@@ -20,6 +20,13 @@ from core.temporal.engine import TemporalEngine
 from models.graph import GraphEntityMeta, GraphRelationMeta
 
 
+def _pid_cond(model, project_id):
+    """project_id 过滤：单值=隔离，列表=融合（项目组联合）。"""
+    if isinstance(project_id, (list, tuple, set)):
+        return model.project_id.in_(list(project_id))
+    return model.project_id == project_id
+
+
 class PGGraphRepository:
     # ---------------- 实体 ----------------
     @staticmethod
@@ -31,7 +38,7 @@ class PGGraphRepository:
         limit: int = 10,
     ) -> List[GraphEntityMeta]:
         stmt = select(GraphEntityMeta).where(
-            GraphEntityMeta.project_id == project_id,
+            _pid_cond(GraphEntityMeta, project_id),
             GraphEntityMeta.name.ilike(f"%{name}%"),
         )
         stmt = TemporalEngine.apply_temporal_filter(stmt, GraphEntityMeta, as_of=as_of)
@@ -42,7 +49,7 @@ class PGGraphRepository:
         db: AsyncSession, project_id: str, kuzu_uuid: str, as_of: Optional[datetime] = None
     ) -> Optional[GraphEntityMeta]:
         stmt = select(GraphEntityMeta).where(
-            GraphEntityMeta.project_id == project_id,
+            _pid_cond(GraphEntityMeta, project_id),
             GraphEntityMeta.kuzu_uuid == kuzu_uuid,
         )
         stmt = TemporalEngine.apply_temporal_filter(stmt, GraphEntityMeta, as_of=as_of)
@@ -53,7 +60,7 @@ class PGGraphRepository:
     async def _active_relations(
         db: AsyncSession, project_id: str, as_of: Optional[datetime] = None
     ) -> List[GraphRelationMeta]:
-        stmt = select(GraphRelationMeta).where(GraphRelationMeta.project_id == project_id)
+        stmt = select(GraphRelationMeta).where(_pid_cond(GraphRelationMeta, project_id))
         stmt = TemporalEngine.apply_temporal_filter(stmt, GraphRelationMeta, as_of=as_of)
         return list((await db.scalars(stmt)).all())
 
@@ -130,7 +137,7 @@ class PGGraphRepository:
         limit: int = 500,
     ) -> dict:
         """返回 Cytoscape 友好的 {nodes, edges}。"""
-        ent_stmt = select(GraphEntityMeta).where(GraphEntityMeta.project_id == project_id)
+        ent_stmt = select(GraphEntityMeta).where(_pid_cond(GraphEntityMeta, project_id))
         ent_stmt = TemporalEngine.apply_temporal_filter(ent_stmt, GraphEntityMeta, as_of=as_of)
         entities = list((await db.scalars(ent_stmt.limit(limit))).all())
         relations = await cls._active_relations(db, project_id, as_of)
