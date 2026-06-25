@@ -93,4 +93,7 @@ async def search_memory(
     ctx: ProjectContext = Depends(get_project_context),
     db: AsyncSession = Depends(get_db),
 ):
-    return await retrieval_service.search(db, ctx.project, payload)
+    from core.permissions import resolve_project_scope
+
+    pids = await resolve_project_scope(db, ctx.user, ctx.project, fusion=payload.fusion)
+    return await retrieval_service.search(db, ctx.project, payload, project_ids=pids)

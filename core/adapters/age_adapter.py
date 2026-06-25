@@ -94,14 +94,19 @@ class AgeAdapter:
         raw = await conn.get_raw_connection()
         return raw.driver_connection  # asyncpg.Connection
 
-    async def _cypher_write(self, cypher: str) -> None:
-        eng = self._get_engine()
-        async with eng.begin() as conn:
+    async def _cypher_write(self, cypher: str, session=None) -> None:
+        sql = f"SELECT * FROM cypher('{self._graph}', $$ {cypher} $$) as (v agtype);"
+        if session is not None:
+            # 复用调用方事务（Phase C 单事务写入：镜像表+AGE+pgvector 同一 commit）
+            conn = await session.connection()
             apg = await self._raw(conn)
             await apg.execute(_SEARCH_PATH)
-            await apg.execute(
-                f"SELECT * FROM cypher('{self._graph}', $$ {cypher} $$) as (v agtype);"
-            )
+            await apg.execute(sql)
+            return
+        async with self._get_engine().begin() as conn:
+            apg = await self._raw(conn)
+            await apg.execute(_SEARCH_PATH)
+            await apg.execute(sql)
 
     async def _cypher_read(self, cypher: str, cols: str) -> List[dict]:
         eng = self._get_engine()
@@ -116,7 +121,7 @@ class AgeAdapter:
     # ---------------- 写入（投影当前状态）----------------
     async def upsert_entity(
         self, project_id: str, kuzu_uuid: str, name: str, entity_type: str,
-        version: int = 1, valid_from: Optional[datetime] = None,
+        version: int = 1, valid_from: Optional[datetime] = None, session=None,
     ) -> None:
         vf = _esc(valid_from.isoformat()) if valid_from else ""
         cy = (
@@ -124,12 +129,12 @@ class AgeAdapter:
             f"SET n.name='{_esc(name)}', n.entity_type='{_esc(entity_type)}', "
             f"n.version={int(version)}, n.valid_from='{vf}'"
         )
-        await self._cypher_write(cy)
+        await self._cypher_write(cy, session=session)
 
     async def upsert_relation(
         self, project_id: str, rel_type: str, source_uuid: str, target_uuid: str,
         fact: Optional[str] = None, confidence: Optional[float] = None,
-        valid_from: Optional[datetime] = None,
+        valid_from: Optional[datetime] = None, session=None,
     ) -> None:
         conf = float(confidence) if confidence is not None else 0.5
         vf = _esc(valid_from.isoformat()) if valid_from else ""
@@ -139,7 +144,7 @@ class AgeAdapter:
             f"MERGE (a)-[r:REL {{rel_type:'{_esc(rel_type)}', project_id:'{_esc(project_id)}'}}]->(b) "
             f"SET r.fact='{_esc(fact)}', r.confidence={conf}, r.valid_from='{vf}'"
         )
-        await self._cypher_write(cy)
+        await self._cypher_write(cy, session=session)
 
     # ---------------- 遍历（当前状态）----------------
     async def neighbors(

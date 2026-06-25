@@ -80,3 +80,44 @@ def has_permission(user_permissions: Set[str], required: str) -> bool:
         return True
     resource = required.split(":", 1)[0]
     return f"{resource}:*" in user_permissions or "*" in user_permissions
+
+
+async def resolve_project_scope(
+    db: AsyncSession,
+    user: User,
+    project,
+    fusion: bool = False,
+) -> list[str]:
+    """
+    解析检索/推演的可见项目范围（隔离/融合开关核心）。
+      · 隔离（默认 fusion=False）：仅当前项目
+      · 融合（fusion=True）：同租户 + 同 fusion_group 的项目集合，
+        且**经 RBAC 把关**——非超管/租管仅纳入其有成员资格的项目，防止越权融合。
+    """
+    from models.project import Project, ProjectMember, ProjectStatus
+
+    if not fusion or not project.fusion_group:
+        return [project.id]
+
+    stmt = select(Project.id).where(
+        Project.tenant_id == project.tenant_id,
+        Project.fusion_group == project.fusion_group,
+        Project.status != ProjectStatus.DELETED.value,
+    )
+    candidate_ids = [r for r in (await db.scalars(stmt)).all()]
+
+    # 超管 / 租管：组内全部可见
+    if user.system_role in (SystemRole.SUPER_ADMIN.value, SystemRole.TENANT_ADMIN.value):
+        return candidate_ids or [project.id]
+
+    # 普通成员：仅纳入其加入的项目（RBAC 把关）
+    member_ids = set(
+        (await db.scalars(
+            select(ProjectMember.project_id).where(
+                ProjectMember.user_id == user.id,
+                ProjectMember.project_id.in_(candidate_ids),
+            )
+        )).all()
+    )
+    member_ids.add(project.id)  # 当前项目已通过 deps 校验，必在范围内
+    return [pid for pid in candidate_ids if pid in member_ids] or [project.id]

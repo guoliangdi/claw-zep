@@ -135,7 +135,8 @@ class GraphRelationMeta(UUIDBase, TemporalMixin):
         String(36), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
     )
 
-    kuzu_uuid: Mapped[str] = mapped_column(String(36), nullable=False)
+    # 关系逻辑键存「source|type|target」组合，需足够长度（实体 kuzu_uuid 仍为 36）
+    kuzu_uuid: Mapped[str] = mapped_column(String(512), nullable=False)
     graphiti_uuid: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
 
     relation_type: Mapped[str] = mapped_column(String(128), nullable=False)

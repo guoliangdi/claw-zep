@@ -92,7 +92,8 @@ class ChromaAdapter:
             col.upsert(doc_id, vector, clean_meta, text)
 
     async def upsert_entity(
-        self, project, kuzu_uuid: str, name: str, summary: str, tenant_id: str
+        self, project, kuzu_uuid: str, name: str, summary: str, tenant_id: str,
+        session=None,   # 兼容 pgvector 签名；Chroma 无事务概念，忽略
     ) -> None:
         await self.upsert(
             project.chroma_collection_name,

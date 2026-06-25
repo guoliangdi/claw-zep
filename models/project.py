@@ -67,6 +67,11 @@ class Project(UUIDBase):
         Text, nullable=True, comment="实体/关系类型定义，JSON格式"
     )
 
+    # 融合组：同租户内同 fusion_group 的项目允许跨项目联合检索/推演（NULL=不参与融合）
+    fusion_group: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True, comment="知识域/融合组标识，隔离=默认，融合=显式开关"
+    )
+
     # 统计缓存（定时更新，避免实时 count 查询）
     entity_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     relation_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

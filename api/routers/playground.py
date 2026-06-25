@@ -53,4 +53,7 @@ async def playground_search(
     db: AsyncSession = Depends(get_db),
 ):
     """调试检索：支持自定义时序范围与混合权重。"""
-    return await retrieval_service.search(db, ctx.project, payload)
+    from core.permissions import resolve_project_scope
+
+    pids = await resolve_project_scope(db, ctx.user, ctx.project, fusion=payload.fusion)
+    return await retrieval_service.search(db, ctx.project, payload, project_ids=pids)

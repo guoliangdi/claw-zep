@@ -50,11 +50,15 @@ class GraphitiOrchestrator:
     def __init__(self) -> None:
         self._graphiti_cache: dict[str, Any] = {}
         self._heuristic = HeuristicExtractor()
-        # 存储适配器与记忆树钩子
-        from core.adapters.chroma_adapter import chroma_adapter
+        # 存储适配器（按 STORAGE_BACKEND 选择）与记忆树钩子
+        from core.adapters import get_vector_adapter, get_age_adapter
 
-        self.vector_adapter: Optional[Any] = chroma_adapter
+        self.vector_adapter: Optional[Any] = get_vector_adapter()
+        self.age_adapter: Optional[Any] = get_age_adapter()
         self.memory_tree_hook: Optional[Callable] = self._default_memory_tree_hook
+
+    def _age_on(self) -> bool:
+        return settings.storage_backend == "postgres" and settings.age_enabled
 
     @staticmethod
     async def _default_memory_tree_hook(db: AsyncSession, episode: Any, result: Any) -> None:
@@ -207,15 +211,24 @@ class GraphitiOrchestrator:
                 valid_from=reference_time,
                 source=f"graphiti_extract:{result.extractor}",
             )
-            # 向量写入（即使无摘要也以名称建索引，保证语义召回可用）
+            # 向量写入（同事务；即使无摘要也以名称建索引，保证语义召回可用）
             if self.vector_adapter is not None:
                 try:
                     await self.vector_adapter.upsert_entity(
                         project, kuzu_uuid, ent.name, ent.summary or ent.name,
-                        episode.tenant_id,
+                        episode.tenant_id, session=db,
                     )
                 except Exception as exc:  # noqa: BLE001
                     logger.warning("vector upsert failed", error=str(exc))
+            # AGE 图投影（同事务，当前状态）
+            if self._age_on():
+                try:
+                    await self.age_adapter.upsert_entity(
+                        project.id, kuzu_uuid, ent.name, ent.entity_type,
+                        valid_from=reference_time, session=db,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("AGE entity projection failed", error=str(exc))
         return uuid_map
 
     async def _persist_relations(
@@ -254,6 +267,16 @@ class GraphitiOrchestrator:
                 valid_from=rel.valid_at or reference_time,
                 source=f"graphiti_extract:{result.extractor}",
             )
+            # AGE 图投影（同事务，当前状态）
+            if self._age_on():
+                try:
+                    await self.age_adapter.upsert_relation(
+                        project.id, rel.relation_type, src, tgt,
+                        fact=rel.fact, confidence=rel.confidence,
+                        valid_from=rel.valid_at or reference_time, session=db,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("AGE relation projection failed", error=str(exc))
             count += 1
         return count
 

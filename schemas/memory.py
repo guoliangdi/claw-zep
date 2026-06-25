@@ -56,6 +56,8 @@ class SearchRequest(BaseModel):
     search_relations: bool = True
     search_memory_tree: bool = True
     group_id: Optional[str] = None
+    # 隔离/融合开关：false=仅当前项目（默认，隔离）；true=同 fusion_group 项目联合（RBAC 把关）
+    fusion: bool = False
 
 
 class SearchResultItem(BaseModel):

@@ -14,6 +14,8 @@ class ReasoningRequest(BaseModel):
     max_hops: int = Field(default=3, ge=1, le=6, description="因果链路遍历最大跳数")
     max_paths: int = Field(default=20, ge=1, le=100)
     include_memory_tree: bool = True
+    # 隔离/融合开关：false=仅当前项目（默认）；true=同 fusion_group 项目联合（RBAC 把关）
+    fusion: bool = False
 
 
 class CausalPathNode(BaseModel):

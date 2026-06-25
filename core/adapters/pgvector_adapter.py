@@ -57,6 +57,7 @@ class PgVectorAdapter:
         doc_id: str,
         text_content: str,
         metadata: Dict[str, Any],
+        session=None,               # 给定则复用调用方事务（Phase C 单事务写入）
     ) -> None:
         vector = await embedding_adapter.embed_one(text_content)
         kind = metadata.get("kind", "entity")
@@ -82,17 +83,22 @@ class PgVectorAdapter:
                 embedding = EXCLUDED.embedding, text = EXCLUDED.text, meta = EXCLUDED.meta,
                 valid_from = EXCLUDED.valid_from, valid_until = EXCLUDED.valid_until
         """)
+        params = {
+            "id": doc_id, "tenant_id": tenant_id, "project_id": project_id,
+            "kind": kind, "ref_id": ref_id, "text": text_content,
+            "emb": _vec_literal(vector), "vf": vf, "vu": vu,
+            "meta": json.dumps(meta, ensure_ascii=False, default=str),
+        }
+        if session is not None:
+            await session.execute(sql, params)
+            return
         eng = self._get_engine()
         async with eng.begin() as conn:
-            await conn.execute(sql, {
-                "id": doc_id, "tenant_id": tenant_id, "project_id": project_id,
-                "kind": kind, "ref_id": ref_id, "text": text_content,
-                "emb": _vec_literal(vector), "vf": vf, "vu": vu,
-                "meta": json.dumps(meta, ensure_ascii=False, default=str),
-            })
+            await conn.execute(sql, params)
 
     async def upsert_entity(
-        self, project, kuzu_uuid: str, name: str, summary: str, tenant_id: str
+        self, project, kuzu_uuid: str, name: str, summary: str, tenant_id: str,
+        session=None,
     ) -> None:
         await self.upsert(
             project.chroma_collection_name,
@@ -100,6 +106,7 @@ class PgVectorAdapter:
             f"{name}. {summary}",
             {"kind": "entity", "ref_id": kuzu_uuid, "name": name,
              "tenant_id": tenant_id, "project_id": project.id},
+            session=session,
         )
 
     # ---------------- 检索 ----------------

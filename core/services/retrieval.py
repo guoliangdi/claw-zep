@@ -48,30 +48,33 @@ class RetrievalService:
     # ============== 常规检索 ==============
     @classmethod
     async def search(
-        cls, db: AsyncSession, project: Project, req: SearchRequest
+        cls, db: AsyncSession, project: Project, req: SearchRequest,
+        project_ids: Optional[List[str]] = None,
     ) -> SearchResponse:
         start = time.perf_counter()
         as_of = req.as_of
+        # 隔离/融合：project_ids 为 None 时仅当前项目（隔离）；列表则为融合范围
+        pids = project_ids or [project.id]
         results: List[SearchResultItem] = []
 
         entity_scores: Dict[str, float] = {}
         if req.search_entities:
-            entity_scores = await cls._vector_recall_entities(project, req)
+            entity_scores = await cls._vector_recall_entities(project, req, pids)
 
         # 图谱链路扩展：对召回实体的邻居加权（关系强度传播）
         if req.search_relations and entity_scores:
-            await cls._expand_via_graph(db, project.id, entity_scores, as_of)
+            await cls._expand_via_graph(db, pids, entity_scores, as_of)
 
         # 实体结果落库校验 + 时序过滤
         entity_items, entity_objs = await cls._materialize_entities(
-            db, project.id, entity_scores, as_of, req.vector_weight + req.graph_weight
+            db, pids, entity_scores, as_of, req.vector_weight + req.graph_weight
         )
         results.extend(entity_items)
 
         # 记忆树召回（标题/正文/摘要文本匹配 + 加权）
         if req.search_memory_tree:
             tree_items = await cls._recall_memory_tree(
-                db, project.id, req.query, as_of, req.limit, req.tree_weight
+                db, pids, req.query, as_of, req.limit, req.tree_weight
             )
             results.extend(tree_items)
 
@@ -88,13 +91,15 @@ class RetrievalService:
 
     @staticmethod
     async def _vector_recall_entities(
-        project: Project, req: SearchRequest
+        project: Project, req: SearchRequest, project_ids: List[str]
     ) -> Dict[str, float]:
-        hits = await chroma_adapter.query(
+        from core.adapters import get_vector_adapter
+
+        hits = await get_vector_adapter().query(
             project.chroma_collection_name,
             req.query,
             n_results=max(req.limit * 3, 20),
-            where={"kind": "entity", "project_id": project.id},
+            where={"kind": "entity", "project_id": project_ids},
         )
         scores: Dict[str, float] = {}
         for h in hits:
@@ -106,14 +111,14 @@ class RetrievalService:
     @staticmethod
     async def _expand_via_graph(
         db: AsyncSession,
-        project_id: str,
+        project_ids: List[str],
         entity_scores: Dict[str, float],
         as_of: Optional[datetime],
         decay: float = 0.4,
     ) -> None:
         seeds = list(entity_scores.items())
         for uuid, score in seeds:
-            neighbors = await pg_graph_repo.neighbors(db, project_id, uuid, as_of=as_of)
+            neighbors = await pg_graph_repo.neighbors(db, project_ids, uuid, as_of=as_of)
             for _rel, nbr_uuid in neighbors:
                 propagated = score * decay
                 if propagated > entity_scores.get(nbr_uuid, 0.0):
@@ -122,7 +127,7 @@ class RetrievalService:
     @staticmethod
     async def _materialize_entities(
         db: AsyncSession,
-        project_id: str,
+        project_ids: List[str],
         entity_scores: Dict[str, float],
         as_of: Optional[datetime],
         weight: float,
@@ -132,7 +137,7 @@ class RetrievalService:
         if not entity_scores:
             return items, objs
         stmt = select(GraphEntityMeta).where(
-            GraphEntityMeta.project_id == project_id,
+            GraphEntityMeta.project_id.in_(project_ids),
             GraphEntityMeta.kuzu_uuid.in_(list(entity_scores.keys())),
         )
         stmt = TemporalEngine.apply_temporal_filter(stmt, GraphEntityMeta, as_of=as_of)
@@ -160,14 +165,14 @@ class RetrievalService:
     @staticmethod
     async def _recall_memory_tree(
         db: AsyncSession,
-        project_id: str,
+        project_ids: List[str],
         query: str,
         as_of: Optional[datetime],
         limit: int,
         weight: float,
     ) -> List[SearchResultItem]:
         terms = [t for t in query.split() if t]
-        stmt = select(MemoryTreeNode).where(MemoryTreeNode.project_id == project_id)
+        stmt = select(MemoryTreeNode).where(MemoryTreeNode.project_id.in_(project_ids))
         if terms:
             conds = []
             for t in terms:
@@ -202,23 +207,25 @@ class RetrievalService:
     # ============== 推演检索（Palantir）==============
     @classmethod
     async def reason(
-        cls, db: AsyncSession, project: Project, req: ReasoningRequest
+        cls, db: AsyncSession, project: Project, req: ReasoningRequest,
+        project_ids: Optional[List[str]] = None,
     ) -> ReasoningResponse:
         start = time.perf_counter()
         as_of = req.as_of
+        pids = project_ids or [project.id]
 
         # 1. 种子实体：向量召回 + 名称匹配
         search_req = SearchRequest(
             query=req.question, limit=8, as_of=as_of,
             search_entities=True, search_relations=False, search_memory_tree=False,
         )
-        seed_scores = await cls._vector_recall_entities(project, search_req)
+        seed_scores = await cls._vector_recall_entities(project, search_req, pids)
         seed_items, seed_objs = await cls._materialize_entities(
-            db, project.id, seed_scores, as_of, 1.0
+            db, pids, seed_scores, as_of, 1.0
         )
         # 名称直配补充
         for term in [w for w in req.question.split() if len(w) >= 2]:
-            for e in await pg_graph_repo.find_entities_by_name(db, project.id, term, as_of, 3):
+            for e in await pg_graph_repo.find_entities_by_name(db, pids, term, as_of, 3):
                 if all(s.kuzu_uuid != e.kuzu_uuid for s in seed_objs):
                     seed_objs.append(e)
 
@@ -232,7 +239,7 @@ class RetrievalService:
         involved_uuids: set = set()
         for seed in seed_nodes:
             raw_paths = await pg_graph_repo.find_paths(
-                db, project.id, seed.kuzu_uuid,
+                db, pids, seed.kuzu_uuid,
                 max_hops=req.max_hops, max_paths=req.max_paths, as_of=as_of,
             )
             for rp in raw_paths:
@@ -250,7 +257,7 @@ class RetrievalService:
         causal_paths = causal_paths[: req.max_paths]
 
         # 3. 子图可视化
-        viz = await pg_graph_repo.visualization(db, project.id, as_of=as_of)
+        viz = await pg_graph_repo.visualization(db, pids, as_of=as_of)
         from schemas.graph import GraphVisualization, GraphNode, GraphEdge
 
         sub_nodes = [GraphNode(**n) for n in viz["nodes"] if n["id"] in involved_uuids] or [
@@ -270,7 +277,7 @@ class RetrievalService:
         evidence: List[MemoryTreeEvidence] = []
         if req.include_memory_tree:
             tree_items = await cls._recall_memory_tree(
-                db, project.id, req.question, as_of, 5, 1.0
+                db, pids, req.question, as_of, 5, 1.0
             )
             evidence = [
                 MemoryTreeEvidence(

@@ -17,4 +17,7 @@ async def reason(
     db: AsyncSession = Depends(get_db),
 ):
     """自然语言业务问题 → 因果链路推演 → 图谱+记忆树溯源。"""
-    return await retrieval_service.reason(db, ctx.project, payload)
+    from core.permissions import resolve_project_scope
+
+    pids = await resolve_project_scope(db, ctx.user, ctx.project, fusion=payload.fusion)
+    return await retrieval_service.reason(db, ctx.project, payload, project_ids=pids)

@@ -83,8 +83,8 @@ class MemoryTreeNode(UUIDBase, TemporalMixin):
     )
     summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="LLM生成的节点摘要")
 
-    # 主题标签（TopicTree 节点的主题 ID）
-    topic_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    # 主题标签（TopicTree 主题 ID / 会话 group_id / OpenClaw 文档键 openclaw:<key>）
+    topic_id: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
     topic_label: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
 
     # 关联图谱实体（JSON 数组，存 kuzu_uuid 列表）
