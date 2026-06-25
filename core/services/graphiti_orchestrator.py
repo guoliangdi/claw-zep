@@ -179,6 +179,24 @@ class GraphitiOrchestrator:
             logger.error("episode ingest failed", episode_id=episode.id, error=str(exc))
             raise
 
+    async def persist_structured(
+        self,
+        db: AsyncSession,
+        episode: Episode,
+        project: Project,
+        result: ExtractionResult,
+        reference_time: datetime,
+    ) -> tuple[int, int]:
+        """
+        公开入口：把一份 ExtractionResult 落地到三库（时序+图+向量），跳过抽取。
+        供结构化直灌(bulk)复用 LLM 路径同一套写入逻辑。返回 (实体数, 关系数)。
+        """
+        uuid_map = await self._persist_entities(db, episode, project, result, reference_time)
+        rel_count = await self._persist_relations(
+            db, episode, project, result, reference_time, uuid_map
+        )
+        return len(result.entities), rel_count
+
     async def _persist_entities(
         self,
         db: AsyncSession,

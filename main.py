@@ -112,7 +112,7 @@ async def root() -> dict:
 
 # 路由注册
 from api.routers import (
-    audit, auth, graph, memory, memory_tree, palantir, playground,
+    audit, auth, graph, ingest, memory, memory_tree, palantir, playground,
     projects, rbac, tenants, temporal, users, webhooks,
 )
 
@@ -122,6 +122,7 @@ app.include_router(tenants.router, prefix=f"{API}/tenants", tags=["Tenants"])
 app.include_router(projects.router, prefix=f"{API}/projects", tags=["Projects"])
 app.include_router(graph.router, prefix=f"{API}/graph", tags=["Graph"])
 app.include_router(memory.router, prefix=f"{API}/memory", tags=["Memory"])
+app.include_router(ingest.router, prefix=f"{API}/ingest", tags=["Ingest"])
 app.include_router(temporal.router, prefix=f"{API}/temporal", tags=["Temporal"])
 app.include_router(memory_tree.router, prefix=f"{API}/memory-tree", tags=["MemoryTree"])
 app.include_router(palantir.router, prefix=f"{API}/palantir", tags=["Palantir"])
