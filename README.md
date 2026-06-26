@@ -249,11 +249,11 @@ claw-zep/
 │   ├── services/               # ⭐ graphiti_orchestrator / retrieval / audit
 │   └── tasks/                  # Celery 任务
 ├── models/ · schemas/          # ORM 模型（含 TemporalMixin）/ Pydantic DTO
-├── api/                        # deps · middlewares · routers(13 模块)
-├── graphiti/                   # 官方 Graphiti 源码（vendored）
+├── api/                        # deps · middlewares · routers
+├── graphiti/                   # Graphiti
 ├── openclaw_plugin/            # OpenClaw 云端记忆（服务端路由 + 客户端 SDK）
 ├── migrations/                 # Alembic
-├── frontend/                   # React 前端（12 页面）
+├── frontend/                   # React 前端
 └── docker-compose.yml · Dockerfile · README.md · docs/
 ```
 
@@ -299,5 +299,5 @@ Lightweight auxiliary modules such as client SDKs, API connectors, visualization
 ---
 
 <div align="center">
-<sub>如果这个项目对你有帮助，欢迎 ⭐ Star 支持！</sub>
+<sub>有帮助，欢迎有帮助，欢迎 ⭐ Star 支持！</sub>
 </div>
