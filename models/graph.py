@@ -109,6 +109,8 @@ class GraphEntityMeta(UUIDBase, TemporalMixin):
     name: Mapped[str] = mapped_column(String(256), nullable=False)
     entity_type: Mapped[str] = mapped_column(String(128), nullable=False, comment="本体定义中的实体类型")
     summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 扩展属性（如舆情 risk_level/signal 等），JSON 字符串
+    attributes_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Chroma 向量索引 ID
     chroma_doc_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)

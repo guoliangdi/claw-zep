@@ -223,6 +223,10 @@ class GraphitiOrchestrator:
                     "name": ent.name,
                     "entity_type": ent.entity_type,
                     "summary": ent.summary,
+                    "attributes_json": (
+                        json.dumps(ent.attributes, ensure_ascii=False)
+                        if getattr(ent, "attributes", None) else None
+                    ),
                     "graphiti_uuid": ent.uuid,
                     "source_episode_id": episode.id,
                 },

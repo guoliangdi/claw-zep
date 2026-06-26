@@ -46,6 +46,7 @@ class EntityOut(ORMModel):
     name: str
     entity_type: str
     summary: Optional[str] = None
+    attributes_json: Optional[str] = None
     valid_from: datetime
     valid_until: Optional[datetime] = None
     version: int
@@ -76,6 +77,7 @@ class GraphNode(BaseModel):
     label: str         # name
     type: str          # entity_type
     summary: Optional[str] = None
+    attributes: Dict[str, Any] = Field(default_factory=dict)
     valid_from: Optional[datetime] = None
     valid_until: Optional[datetime] = None
 

@@ -142,12 +142,21 @@ class PGGraphRepository:
         entities = list((await db.scalars(ent_stmt.limit(limit))).all())
         relations = await cls._active_relations(db, project_id, as_of)
 
+        import json as _json
+
+        def _attrs(e):
+            try:
+                return _json.loads(e.attributes_json) if e.attributes_json else {}
+            except Exception:
+                return {}
+
         nodes = [
             {
                 "id": e.kuzu_uuid,
                 "label": e.name,
                 "type": e.entity_type,
                 "summary": e.summary,
+                "attributes": _attrs(e),
                 "valid_from": e.valid_from,
                 "valid_until": e.valid_until,
             }

@@ -11,6 +11,8 @@ from core.redis_client import get_redis, close_redis
 from core.logging import setup_logging, get_logger
 from core.exceptions import ClawZepException
 from api.middlewares import RequestContextMiddleware
+from api.middlewares.ratelimit import RateLimitMiddleware
+from api.middlewares.metrics import MetricsMiddleware
 
 setup_logging()
 logger = get_logger(__name__)
@@ -50,18 +52,19 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
 )
 
-# 请求上下文（request_id + 租户/项目隔离上下文）
-app.add_middleware(RequestContextMiddleware)
-
-# CORS
+# 中间件（add_middleware 后加的在外层）：
+# 执行顺序 Metrics → CORS → RateLimit → RequestContext → 路由
+app.add_middleware(RequestContextMiddleware)   # 最内：先建上下文
+app.add_middleware(RateLimitMiddleware)         # 限流
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.get_cors_origins(),
     allow_credentials=settings.cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Request-ID"],
+    expose_headers=["X-Request-ID", "X-RateLimit-Remaining", "X-RateLimit-Limit"],
 )
+app.add_middleware(MetricsMiddleware)           # 最外：统计全部请求
 
 
 @app.exception_handler(ClawZepException)
@@ -113,8 +116,9 @@ async def root() -> dict:
 # 路由注册
 from api.routers import (
     audit, auth, graph, ingest, memory, memory_tree, palantir, playground,
-    projects, rbac, tenants, temporal, users, webhooks,
+    projects, rbac, system, tenants, temporal, users, webhooks,
 )
+app.include_router(system.router, tags=["System"])
 
 API = "/api/v1"
 app.include_router(auth.router, prefix=f"{API}/auth", tags=["Auth"])
